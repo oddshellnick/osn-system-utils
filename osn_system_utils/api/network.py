@@ -1,15 +1,25 @@
+import random
 import socket
 import psutil
-import collections.abc
 from collections import defaultdict
+from osn_system_utils.utils import validate_parameter
+from osn_system_utils.api._utils import (
+	ALL_PORTS_RANGE,
+	LOCALHOST_IPS
+)
 from typing import (
-	Any,
 	Dict,
 	List,
+	Literal,
 	Optional,
 	Sequence,
+	TYPE_CHECKING,
 	Union
 )
+
+
+if TYPE_CHECKING:
+	from psutil._common import sconn
 
 
 def get_random_localhost_free_port() -> int:
@@ -26,18 +36,18 @@ def get_random_localhost_free_port() -> int:
 		return s.getsockname()[1]
 
 
-def _is_localhost(conn: Any) -> bool:
+def _is_localhost(connection: "sconn") -> bool:
 	"""
 	Checks if a connection object represents a localhost connection.
 
 	Args:
-		conn (Any): A psutil connection object.
+		connection ("sconn"): A psutil connection object.
 
 	Returns:
 		bool: True if the local address IP is in the localhost set.
 	"""
 	
-	return hasattr(conn, 'laddr') and conn.laddr.ip in _LOCALHOST_IPS
+	return hasattr(connection, "laddr") and connection.laddr.ip in LOCALHOST_IPS
 
 
 def get_localhost_pids_with_ports() -> Dict[int, List[int]]:
@@ -51,15 +61,15 @@ def get_localhost_pids_with_ports() -> Dict[int, List[int]]:
 	result = defaultdict(list)
 	
 	connections = [
-		c
-		for c in psutil.net_connections(kind="inet")
-		if c.pid
-		and _is_localhost(c)
+		connection
+		for connection in psutil.net_connections(kind="inet")
+		if connection.pid
+		and _is_localhost(connection=connection)
 	]
 	
-	for conn in connections:
-		port = conn.laddr.port
-		p_list = result[conn.pid]
+	for connection in connections:
+		port = connection.laddr.port
+		p_list = result[connection.pid]
 	
 		if port not in p_list:
 			p_list.append(port)
@@ -78,20 +88,51 @@ def get_localhost_pids_with_addresses() -> Dict[int, List[str]]:
 	result = defaultdict(list)
 	
 	connections = [
-		c
-		for c in psutil.net_connections(kind="inet")
-		if c.pid
-		and _is_localhost(c)
+		connection
+		for connection in psutil.net_connections(kind="inet")
+		if connection.pid
+		and _is_localhost(connection=connection)
 	]
 	
-	for conn in connections:
-		addr_str = f"{conn.laddr.ip}:{conn.laddr.port}"
-		p_list = result[conn.pid]
+	for connection in connections:
+		addr_str = f"{connection.laddr.ip}:{connection.laddr.port}"
+		p_list = result[connection.pid]
 	
 		if addr_str not in p_list:
 			p_list.append(addr_str)
 	
 	return dict(result)
+
+
+def get_localhost_busy_ports() -> List[int]:
+	"""
+	Retrieves a sorted list of ports currently in use on localhost.
+
+	Returns:
+		List[int]: A sorted list of busy ports.
+	"""
+	
+	ports = {
+		connection.laddr.port
+		for connection in psutil.net_connections(kind="inet")
+		if _is_localhost(connection=connection)
+	}
+	
+	return sorted(list(ports))
+
+
+def get_localhost_free_ports() -> List[int]:
+	"""
+	Retrieves a sorted list of all free ports in the default range on localhost.
+
+	Returns:
+		List[int]: A sorted list of free ports.
+	"""
+	
+	busy_ports = set(get_localhost_busy_ports())
+	free_ports = ALL_PORTS_RANGE - busy_ports
+	
+	return sorted(list(free_ports))
 
 
 def _is_port_free(port: int) -> bool:
@@ -110,81 +151,65 @@ def _is_port_free(port: int) -> bool:
 			s.bind(("127.0.0.1", port))
 	
 			return True
+	
 	except OSError:
 		return False
 
 
-def get_localhost_minimum_free_port(ports_to_check: Optional[Union[int, Sequence[int]]] = None) -> int:
+def get_localhost_free_port_of(
+		ports_to_check: Optional[Union[int, Sequence[int]]] = None,
+		on_candidates: Literal["min", "max", "random"] = "min",
+) -> int:
 	"""
-	Finds the minimum free port from a specific set or the default range.
+	Finds a free port among candidates or the global range.
 
 	Args:
-		ports_to_check (Optional[Union[int, Sequence[int]]]): A specific port or sequence of ports to check.
-			If None, checks the global range.
+		ports_to_check (Optional[Union[int, Sequence[int]]]): Specific port(s) to check.
+		on_candidates (Literal["min", "max", "random"]): Strategy to select from candidates.
 
 	Returns:
-		int: The minimum free port found.
+		int: A free port number.
 
 	Raises:
-		RuntimeError: If no free ports are found in the range.
+		TypeError: If ports_to_check is invalid type.
+		RuntimeError: If no free ports are found.
 	"""
 	
-	if ports_to_check is not None:
-		if isinstance(ports_to_check, int):
-			if _is_port_free(port=ports_to_check):
-				return ports_to_check
+	validate_parameter(
+			value=on_candidates,
+			value_name="on_candidates",
+			available_values=["min", "max", "random"]
+	)
 	
-		if isinstance(ports_to_check, collections.abc.Sequence):
-			available_candidates = [
-				port
-				for port in ports_to_check
-				if isinstance(port, int)
-				and _is_port_free(port=port)
-			]
+	if isinstance(ports_to_check, int):
+		candidates_iterator = [ports_to_check]
+	elif isinstance(ports_to_check, Sequence):
+		valid_ports = [p for p in ports_to_check if isinstance(p, int)]
 	
-			if available_candidates:
-				return min(available_candidates)
+		if on_candidates == "min":
+			valid_ports.sort()
+		elif on_candidates == "max":
+			valid_ports.sort(reverse=True)
+		elif on_candidates == "random":
+			random.shuffle(valid_ports)
 	
-	for port in _ALL_PORTS_RANGE:
-		if _is_port_free(port=port):
+		candidates_iterator = valid_ports
+	elif ports_to_check is None:
+		if on_candidates == "min":
+			candidates_iterator = ALL_PORTS_RANGE
+		elif on_candidates == "max":
+			candidates_iterator = reversed(ALL_PORTS_RANGE)
+		elif on_candidates == "random":
+			candidates_list = list(ALL_PORTS_RANGE)
+			random.shuffle(candidates_list)
+	
+			candidates_iterator = candidates_list
+	else:
+		raise TypeError("ports_to_check must be an integer or a sequence of integers")
+	
+	for port in candidates_iterator:
+		if _is_port_free(port):
 			return port
 	
-	raise RuntimeError(f"No free ports found in range {_PORT_RANGE_START}-{_PORT_RANGE_END}")
-
-
-def get_localhost_busy_ports() -> List[int]:
-	"""
-	Retrieves a sorted list of ports currently in use on localhost.
-
-	Returns:
-		List[int]: A sorted list of busy ports.
-	"""
-	
-	ports = {
-		c.laddr.port
-		for c in psutil.net_connections(kind="inet")
-		if _is_localhost(c)
-	}
-	
-	return sorted(list(ports))
-
-
-def get_localhost_free_ports() -> List[int]:
-	"""
-	Retrieves a sorted list of all free ports in the default range on localhost.
-
-	Returns:
-		List[int]: A sorted list of free ports.
-	"""
-	
-	busy_ports = set(get_localhost_busy_ports())
-	free_ports = _ALL_PORTS_RANGE - busy_ports
-	
-	return sorted(list(free_ports))
-
-
-_LOCALHOST_IPS = frozenset({'127.0.0.1', '::1', '0.0.0.0', '::'})
-
-_PORT_RANGE_START = 1024
-_PORT_RANGE_END = 49151
-_ALL_PORTS_RANGE = frozenset(range(_PORT_RANGE_START, _PORT_RANGE_END))
+	source_msg = "provided ports" if ports_to_check is not None else "global range"
+	raise RuntimeError(f"No free ports found in {source_msg}")

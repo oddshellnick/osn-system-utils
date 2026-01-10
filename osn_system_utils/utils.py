@@ -12,6 +12,9 @@ from typing import (
 )
 
 
+T = TypeVar("T")
+
+
 def validate_parameter(value: Any, value_name: str, available_values: Iterable[Any]) -> None:
 	"""
 	Validates that a value is present in a list of available values.
@@ -26,7 +29,7 @@ def validate_parameter(value: Any, value_name: str, available_values: Iterable[A
 	"""
 	
 	if value not in available_values:
-		available_str = ', '.join(map(str, available_values))
+		available_str = ", ".join(map(str, available_values))
 	
 		raise ValueError(f"Invalid {value_name}: {value}. Valid values are: {available_str}")
 
@@ -81,6 +84,3 @@ def deduplicate_list(items: Optional[Iterable[T]]) -> List[T]:
 		return []
 	
 	return list(dict.fromkeys(items))
-
-
-T = TypeVar("T")

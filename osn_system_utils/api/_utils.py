@@ -1,0 +1,5 @@
+LOCALHOST_IPS = frozenset({'127.0.0.1', '::1', '0.0.0.0', '::'})
+
+PORT_RANGE_START = 1024
+PORT_RANGE_END = 65536
+ALL_PORTS_RANGE = frozenset(range(PORT_RANGE_START, PORT_RANGE_END))
