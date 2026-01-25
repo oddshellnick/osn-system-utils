@@ -9,14 +9,23 @@ from osn_system_utils.api._utils import (
 )
 from typing import (
 	Dict,
+	Iterable,
 	List,
 	Literal,
 	Optional,
-	Sequence,
 	TYPE_CHECKING,
 	Union
 )
 
+
+__all__ = [
+	"get_localhost_busy_ports",
+	"get_localhost_free_port_of",
+	"get_localhost_free_ports",
+	"get_localhost_pids_with_addresses",
+	"get_localhost_pids_with_ports",
+	"get_random_localhost_free_port"
+]
 
 if TYPE_CHECKING:
 	from psutil._common import sconn
@@ -151,20 +160,19 @@ def _is_port_free(port: int) -> bool:
 			s.bind(("127.0.0.1", port))
 	
 			return True
-	
 	except OSError:
 		return False
 
 
 def get_localhost_free_port_of(
-		ports_to_check: Optional[Union[int, Sequence[int]]] = None,
+		ports_to_check: Optional[Union[int, Iterable[int]]] = None,
 		on_candidates: Literal["min", "max", "random"] = "min",
 ) -> int:
 	"""
 	Finds a free port among candidates or the global range.
 
 	Args:
-		ports_to_check (Optional[Union[int, Sequence[int]]]): Specific port(s) to check.
+		ports_to_check (Optional[Union[int, Iterable[int]]]): Specific port(s) to check.
 		on_candidates (Literal["min", "max", "random"]): Strategy to select from candidates.
 
 	Returns:
@@ -183,7 +191,7 @@ def get_localhost_free_port_of(
 	
 	if isinstance(ports_to_check, int):
 		candidates_iterator = [ports_to_check]
-	elif isinstance(ports_to_check, Sequence):
+	elif isinstance(ports_to_check, Iterable):
 		valid_ports = [p for p in ports_to_check if isinstance(p, int)]
 	
 		if on_candidates == "min":

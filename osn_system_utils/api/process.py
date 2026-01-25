@@ -1,11 +1,11 @@
 import re
 import psutil
 import functools
-from pandas import DataFrame
 from typing import (
 	Any,
 	Callable,
 	Dict,
+	Iterator,
 	List,
 	Tuple
 )
@@ -18,6 +18,15 @@ from osn_system_utils.api._functions import (
 	check_under,
 	get_nested_val
 )
+
+
+__all__ = [
+	"check_process_exists_by_name",
+	"check_process_exists_by_pid",
+	"get_process_table",
+	"kill_process_by_pid",
+	"kill_processes_by_name"
+]
 
 
 def _kill_proc_obj(proc: psutil.Process, force: bool = False, tree: bool = False) -> bool:
@@ -52,7 +61,6 @@ def _kill_proc_obj(proc: psutil.Process, force: bool = False, tree: bool = False
 				continue
 	
 		return True
-	
 	except (psutil.NoSuchProcess, psutil.AccessDenied):
 		return False
 
@@ -92,7 +100,6 @@ def kill_processes_by_name(
 			if is_match:
 				if _kill_proc_obj(proc, force=force, tree=tree):
 					killed_pids.append(proc.info["pid"])
-	
 		except (psutil.NoSuchProcess, psutil.AccessDenied):
 			continue
 	
@@ -115,7 +122,6 @@ def kill_process_by_pid(pid: int, force: bool = False, tree: bool = False) -> bo
 	try:
 		proc = psutil.Process(pid)
 		return _kill_proc_obj(proc, force=force, tree=tree)
-	
 	except psutil.NoSuchProcess:
 		return False
 
@@ -128,21 +134,21 @@ def get_process_table(
 		above_filter: Dict[str, Any] = None,
 		under_filter: Dict[str, Any] = None,
 		between_filter: Dict[str, Tuple[Any, Any]] = None,
-) -> DataFrame:
+) -> Iterator[Dict[str, Any]]:
 	"""
-	Generates a pandas DataFrame of system processes, filtered by various criteria.
+	Yields process information as a table based on provided filters.
 
 	Args:
-		columns (Dict[str, str]): Map of DataFrame column names to psutil attribute names.
-		regex_filter (Dict[str, re.Pattern[str]]): Filters attributes matching regex patterns.
-		equal_filter (Dict[str, Any]): Filters attributes equal to values.
-		not_equal_filter (Dict[str, Any]): Filters attributes not equal to values.
-		above_filter (Dict[str, Any]): Filters attributes strictly greater than values.
-		under_filter (Dict[str, Any]): Filters attributes strictly less than values.
-		between_filter (Dict[str, Tuple[Any, Any]]): Filters attributes strictly between two values.
+		columns (Optional[Dict[str, str]]): Mapping of column names to psutil attribute paths.
+		regex_filter (Optional[Dict[str, re.Pattern[str]]]): Filters by regex pattern.
+		equal_filter (Optional[Dict[str, Any]]): Filters by equality.
+		not_equal_filter (Optional[Dict[str, Any]]): Filters by inequality.
+		above_filter (Optional[Dict[str, Any]]): Filters by greater than.
+		under_filter (Optional[Dict[str, Any]]): Filters by less than.
+		between_filter (Optional[Dict[str, Tuple[Any, Any]]]): Filters by range (min, max).
 
 	Returns:
-		DataFrame: A pandas DataFrame containing the process information.
+		Iterator[Dict[str, Any]]: Iterator yielding process data dictionaries.
 	"""
 	
 	if columns is None:
@@ -190,8 +196,6 @@ def get_process_table(
 		for attr, (min_v, max_v) in between_filter.items():
 			validators.append(functools.partial(check_between, attribute=attr, min_=min_v, max_=max_v))
 	
-	data: List[Dict[str, Any]] = []
-	
 	for proc in psutil.process_iter(attributes_to_fetch):
 		try:
 			info = proc.info
@@ -199,16 +203,12 @@ def get_process_table(
 			if not all(validate(info) for validate in validators):
 				continue
 	
-			data.append(
-					{
-						col_name: get_nested_val(value=info, path=attr_path)
-						for col_name, attr_path in columns.items()
-					}
-			)
-		except (psutil.NoSuchProcess, psutil.AccessDenied):
+			yield {
+				col_name: get_nested_val(value=info, path=attr_path)
+				for col_name, attr_path in columns.items()
+			}
+		except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
 			continue
-	
-	return DataFrame(data)
 
 
 def check_process_exists_by_pid(pid: int) -> bool:
