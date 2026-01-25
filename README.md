@@ -1,6 +1,6 @@
-# osn-system-utils: Cross-platform system command wrappers and network utilities
+# osn_system_utils: A comprehensive cross-platform library for system process and network management.
 
-This library provides a set of Python abstractions for common system administration tasks on Linux and Windows, as well as utilities for network port management. It allows developers to interact with system commands like `shutdown`, `kill`, `netstat`, and `ss` using structured, type-hinted Python functions instead of raw shell execution strings.
+This library provides a high-level API for managing system processes, discovering network ports, and executing OS-specific commands like shutdown or socket statistics on both Linux and Windows.
 
 ## Technologies
 
@@ -13,38 +13,34 @@ This library provides a set of Python abstractions for common system administrat
 
 ## Key Features
 
-*   **Cross-Platform Network Utilities:**
-    *   Find random or minimum free ports on localhost.
-    *   Map PIDs to used ports and addresses.
-    *   Identify busy and free ports within specific ranges.
-*   **Linux System Wrappers:**
-    *   `kill` and `pkill` for process management.
-    *   `shutdown` for power management.
-    *   `ss` for detailed socket statistics.
-*   **Windows System Wrappers:**
-    *   `taskkill` for process termination.
-    *   `shutdown` for power management.
-    *   `netstat` for network statistics.
-*   **Type Safety:**
-    *   Input validation for command arguments (modes, modifiers, protocols).
-    *   Custom exception handling for command execution failures.
+*   **Network Management**
+    *   Find free ports on localhost using various strategies (min, max, random).
+    *   Map PIDs to active ports or formatted addresses.
+    *   Check for busy and free ports within specific ranges.
+*   **Process Management**
+    *   Kill processes by name or PID with support for process trees.
+    *   Query process tables with advanced filtering (regex, equality, numeric ranges).
+    *   Cross-platform check for process existence.
+*   **OS-Specific Wrappers**
+    *   **Linux:** High-level wrappers for `pkill`, `kill`, `shutdown`, and `ss` (socket statistics).
+    *   **Windows:** High-level wrappers for `taskkill`, `shutdown`, and `netstat`.
 
 ## Installation
 
 1. Install library:
     *   **With pip:**
         ```bash
-        pip install osn-system-utils
+        pip install osn_system_utils
         ```
 
         **With pip (beta versions):**
         ```bash
-        pip install -i https://test.pypi.org/simple/ osn-system-utils
+        pip install -i https://test.pypi.org/simple/ osn_system_utils
         ```
 
     *   **With git:**
         ```bash
-        pip install git+https://github.com/oddshellnick/osn-system-utils.git
+        pip install git+https://github.com/oddshellnick/osn_system_utils.git
         ```
         *(Ensure you have git installed)*
 
@@ -56,95 +52,84 @@ This library provides a set of Python abstractions for common system administrat
 
 ## Usage
 
-Here are some examples of how to use `osn-system-utils`:
+Here are some examples of how to use `osn_system_utils`:
 
-### Network Utilities
-
-Retrieve a free port on localhost or check which ports are busy.
+### Network Port Discovery
 
 ```python
-from osn_system_utils.api.network import get_random_localhost_free_port, get_localhost_pids_with_ports
+from osn_system_utils.api.network import get_localhost_free_port_of
 
-# Get a random free port
-port = get_random_localhost_free_port()
-print(f"Found free port: {port}")
+# Find the first available free port in the default range
+port = get_localhost_free_port_of(on_candidates="min")
+print(f"Available port: {port}")
 
-# Get mapping of PIDs to ports
-pid_map = get_localhost_pids_with_ports()
-print(pid_map)
+# Find a random free port from a specific list
+specific_port = get_localhost_free_port_of(ports_to_check=[8080, 8081, 9000], on_candidates="random")
 ```
 
-### Linux Process Management
-
-Kill a process by name pattern on a Linux system.
+### Advanced Process Filtering
 
 ```python
-from osn_system_utils.linux.kill import run_pkill
+from osn_system_utils.api.process import get_process_table
+import re
 
-try:
-    # Kill the newest process matching "python_script"
-    output = run_pkill(pattern="python_script", modifiers=["newest"])
-    print("Process killed.")
-except Exception as e:
-    print(f"Error: {e}")
+# Get all python processes using more than 100MB of memory
+filters = {
+    "memory_info.rss": 100 * 1024 * 1024
+}
+for proc in get_process_table(above_filter=filters):
+    print(proc)
 ```
 
-### Windows Task Management
-
-Forcefully terminate a task by image name on Windows.
+### Linux Socket Statistics (ss)
 
 ```python
-from osn_system_utils.windows.taskkill import run_taskkill
+from osn_system_utils.linux.ss import run_ss
 
-try:
-    # Force kill notepad.exe
-    run_taskkill(image_names=["notepad.exe"], modifiers=["force"])
-    print("Notepad closed.")
-except ValueError as e:
-    print(e)
+# Get a summary of all listening TCP sockets
+output = run_ss(mode="list", scope="listening", protocols=["tcp"])
+print(output)
 ```
 
 ## Classes and Functions
 
-### Core Utilities (`osn_system_utils`)
-*   **`exceptions`**
-    *   `CommandExecutionError` - Exception raised when a command execution fails.
-*   **`utils`**
-    *   `validate_parameter(...)` - Validates that a value is present in a list of available values.
-    *   `run_command(...)` - Executes a shell command provided as a list of parts.
-    *   `deduplicate_list(...)` - Removes duplicate items from a list while preserving order.
+### General Utilities (`osn_system_utils.utils`)
+*   `validate_parameter(...)`: Validates that a value exists within a sequence of allowed values.
+*   `run_command(...)`: Executes a shell command and returns the stdout.
+*   `deduplicate_list(...)`: Removes duplicates from an iterable while maintaining order.
+*   `CommandExecutionError`: Exception raised when a system command fails.
 
 ### Network API (`osn_system_utils.api.network`)
-*   `get_random_localhost_free_port(...)` - Finds a random free port on localhost by binding to port 0.
-*   `get_localhost_pids_with_ports(...)` - Retrieves a mapping of PIDs to lists of ports they are using on localhost.
-*   `get_localhost_pids_with_addresses(...)` - Retrieves a mapping of PIDs to lists of formatted addresses (IP:Port) on localhost.
-*   `get_localhost_minimum_free_port(...)` - Finds the minimum free port from a specific set or the default range.
-*   `get_localhost_busy_ports(...)` - Retrieves a sorted list of ports currently in use on localhost.
-*   `get_localhost_free_ports(...)` - Retrieves a sorted list of all free ports in the default range on localhost.
+*   `get_random_localhost_free_port()`
+*   `get_localhost_pids_with_ports()`
+*   `get_localhost_pids_with_addresses()`
+*   `get_localhost_busy_ports()`
+*   `get_localhost_free_ports()`
+*   `get_localhost_free_port_of(...)`
 
-### Linux Wrappers (`osn_system_utils.linux`)
-*   **`kill`**
-    *   `build_pkill(...)` - Builds the pkill command list.
-    *   `run_pkill(...)` - Executes the pkill command.
-    *   `build_kill(...)` - Builds the kill command list.
-    *   `run_kill(...)` - Executes the kill command for specified PIDs.
-*   **`shutdown`**
-    *   `build_shutdown(...)` - Builds the shutdown command arguments.
-    *   `run_shutdown(...)` - Executes the shutdown command.
-*   **`ss`**
-    *   `build_ss(...)` - Builds the ss (socket statistics) command arguments.
-    *   `run_ss(...)` - Executes the ss command.
+### Process API (`osn_system_utils.api.process`)
+*   `kill_processes_by_name(...)`
+*   `kill_process_by_pid(...)`
+*   `get_process_table(...)`
+*   `check_process_exists_by_pid(...)`
+*   `check_process_exists_by_name(...)`
 
-### Windows Wrappers (`osn_system_utils.windows`)
-*   **`netstat`**
-    *   `build_netstat(...)` - Builds the netstat command arguments.
-    *   `run_netstat(...)` - Executes the netstat command.
-*   **`shutdown`**
-    *   `build_shutdown(...)` - Builds the shutdown command arguments (Windows specific).
-    *   `run_shutdown(...)` - Executes the shutdown command.
-*   **`taskkill`**
-    *   `build_taskkill(...)` - Builds the taskkill command arguments.
-    *   `run_taskkill(...)` - Executes the taskkill command.
+### Linux System Wrappers (`osn_system_utils.linux`)
+*   `kill`:
+    *   `run_pkill(...)`: Execute Linux `pkill`.
+    *   `run_kill(...)`: Execute Linux `kill` for specific PIDs.
+*   `shutdown`:
+    *   `run_shutdown(...)`: Manage system power (reboot, poweroff, etc.).
+*   `ss`:
+    *   `run_ss(...)`: Execute socket statistics command.
+
+### Windows System Wrappers (`osn_system_utils.windows`)
+*   `netstat`:
+    *   `run_netstat(...)`: Execute Windows `netstat` with various flags.
+*   `shutdown`:
+    *   `run_shutdown(...)`: Manage Windows system power and restart behavior.
+*   `taskkill`:
+    *   `run_taskkill(...)`: Terminate tasks by PID or Image Name.
 
 ## Future Notes
 
