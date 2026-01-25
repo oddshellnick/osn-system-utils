@@ -11,6 +11,21 @@ from osn_system_utils.utils import (
 )
 
 
+__all__ = [
+	"AvailableNetstatAddresses",
+	"AvailableNetstatModes",
+	"AvailableNetstatModifiers",
+	"AvailableNetstatProtocols",
+	"AvailableNetstatScopes",
+	"NetstatAddress",
+	"NetstatMode",
+	"NetstatModifier",
+	"NetstatProtocol",
+	"NetstatScope",
+	"build_netstat",
+	"run_netstat"
+]
+
 NetstatMode = Literal["default", "routing_table", "ethernet_stats", "protocol_stats"]
 AvailableNetstatModes = ["default", "routing_table", "ethernet_stats", "protocol_stats"]
 

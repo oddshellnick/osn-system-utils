@@ -12,6 +12,15 @@ from osn_system_utils.utils import (
 )
 
 
+__all__ = [
+	"AvailablePkillModifiers",
+	"PkillModifier",
+	"build_kill",
+	"build_pkill",
+	"run_kill",
+	"run_pkill"
+]
+
 PkillModifier = Literal[
 	"full_command_line",
 	"newest",
