@@ -12,7 +12,9 @@ from typing import (
 )
 
 
-T = TypeVar("T")
+__all__ = ["deduplicate_list", "run_command", "validate_parameter"]
+
+_T = TypeVar("_T")
 
 
 def validate_parameter(value: Any, value_name: str, available_values: Iterable[Any]) -> None:
@@ -69,7 +71,7 @@ def run_command(command_parts: Sequence[str], encoding: str) -> str:
 		raise CommandExecutionError(f"Command not found: {cmd[0]}")
 
 
-def deduplicate_list(items: Optional[Iterable[T]]) -> List[T]:
+def deduplicate_list(items: Optional[Iterable[_T]]) -> List[_T]:
 	"""
 	Removes duplicate items from a list while preserving order.
 
